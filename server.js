@@ -32,34 +32,93 @@ const verifyToken = (req, res, next) => {
     next();
   })
 }
+// const verifyAdmin = async (req, res, next) => {
+//   try {
+//     // Ensure the user is authenticated
+//     if (!req.user || !req.user.email) {
+//       return res.status(401).json({ message: 'Unauthorized' });
+//     }
+
+//     // Find user in the database
+//     const user = await prisma.user.findUnique({
+//       where: { email: req.user.email },
+//     });
+
+//     // Check if user is an admin
+//     if (!user || user.isAdmin !== true) {
+//       return res.status(403).json({ message: 'Forbidden: Admin access only' });
+//     }
+
+//     next(); // Proceed to next middleware
+//   } catch (error) {
+//     res.status(500).json({ message: 'Internal server error' });
+//   }
+// };
+
+
 const verifyAdmin = async (req, res, next) => {
   try {
-    // Ensure the user is authenticated
-    if (!req.user || !req.user.email) {
-      return res.status(401).json({ message: 'Unauthorized' });
-    }
+      if (!req.decoded || !req.decoded.email) {
+          return res.status(401).json({ message: 'Unauthorized' });
+      }
 
-    // Find user in the database
-    const user = await prisma.user.findUnique({
-      where: { email: req.user.email },
-    });
+      console.log('Admin Check: Fetching user with email:', req.decoded.email);
 
-    // Check if user is an admin
-    if (!user || user.isAdmin !== TRUE) {
-      return res.status(403).json({ message: 'Forbidden: Admin access only' });
-    }
+      const user = await prisma.user.findUnique({
+          where: { email: req.decoded.email },
+      });
 
-    next(); // Proceed to next middleware
+      console.log('User found:', user); // Log user data
+
+      if (!user) {
+          return res.status(404).json({ message: 'User not found' });
+      }
+
+      if (user.isAdmin !== true) {  // Ensure isAdmin is boolean true
+          return res.status(403).json({ message: 'Forbidden: Admin access only' });
+      }
+
+      next();
   } catch (error) {
-    res.status(500).json({ message: 'Internal server error' });
+      console.error('Error in verifyAdmin:', error);
+      res.status(500).json({ message: 'Internal server error' });
   }
 };
-app.get("/users", verifyAdmin, async (req, res) => {
+
+
+
+app.get("/users", verifyToken,verifyAdmin, async (req, res) => {
   try {
     const users = await prisma.user.findMany();
     res.json(users);
   } catch (error) {
     res.status(500).json({ error: "Failed to fetch users" });
+  }
+});
+app.patch("/users/block/:userId",verifyToken, verifyAdmin, async (req, res) => {
+  const { userId } = req.params;
+  try {
+    const user = await prisma.user.update({
+      where: { id: Number(userId) },
+      data: { isBlocked: true },
+    });
+    res.json({ message: "User blocked", user });
+  } catch (error) {
+    res.status(400).json({ error: "Error blocking user" });
+  }
+});
+
+// Unblock user
+app.patch("/users/unblock/:userId", verifyToken,verifyAdmin, async (req, res) => {
+  const { userId } = req.params;
+  try {
+    const user = await prisma.user.update({
+      where: { id: Number(userId) },
+      data: { isBlocked: false },
+    });
+    res.json({ message: "User unblocked", user });
+  } catch (error) {
+    res.status(400).json({ error: "Error unblocking user" });
   }
 });
 // Get user and check if the user is an admin
@@ -130,7 +189,47 @@ app.post("/users", async (req, res) => {
       res.status(400).json({ error: "User creation failed" });
     }
   });
-  
+ // Delete user
+app.delete("/users/:userId", verifyToken, verifyAdmin, async (req, res) => {
+  const { userId } = req.params;
+  try {
+      await prisma.user.delete({ where: { id: Number(userId) } });
+      res.json({ message: "User deleted successfully" });
+  } catch (error) {
+      console.error("Error deleting user:", error);
+      res.status(400).json({ error: "Error deleting user" });
+  }
+});
+
+// Add admin role
+app.patch("/users/admin/:userId", verifyToken, verifyAdmin, async (req, res) => {
+  const { userId } = req.params;
+  try {
+      const user = await prisma.user.update({
+          where: { id: Number(userId) },
+          data: { isAdmin: true },
+      });
+      res.json({ message: "User promoted to admin", user });
+  } catch (error) {
+      console.error("Error promoting user:", error);
+      res.status(400).json({ error: "Error promoting user" });
+  }
+});
+
+// Remove admin role
+app.patch("/users/remove-admin/:userId", verifyToken, verifyAdmin, async (req, res) => {
+  const { userId } = req.params;
+  try {
+      const user = await prisma.user.update({
+          where: { id: Number(userId) },
+          data: { isAdmin: false },
+      });
+      res.json({ message: "User demoted from admin", user });
+  } catch (error) {
+      console.error("Error demoting user:", error);
+      res.status(400).json({ error: "Error demoting user" });
+  }
+}); 
 app.listen(5000, () => {
   console.log("Server running on http://localhost:5000");
 });
