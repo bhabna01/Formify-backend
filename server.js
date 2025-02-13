@@ -29,31 +29,10 @@ const verifyToken = (req, res, next) => {
       return res.status(401).send({ message: 'unauthorized access' })
     }
     req.decoded = decoded;
+    console.log('Decoded Token:', decoded);
     next();
   })
 }
-// const verifyAdmin = async (req, res, next) => {
-//   try {
-//     // Ensure the user is authenticated
-//     if (!req.user || !req.user.email) {
-//       return res.status(401).json({ message: 'Unauthorized' });
-//     }
-
-//     // Find user in the database
-//     const user = await prisma.user.findUnique({
-//       where: { email: req.user.email },
-//     });
-
-//     // Check if user is an admin
-//     if (!user || user.isAdmin !== true) {
-//       return res.status(403).json({ message: 'Forbidden: Admin access only' });
-//     }
-
-//     next(); // Proceed to next middleware
-//   } catch (error) {
-//     res.status(500).json({ message: 'Internal server error' });
-//   }
-// };
 
 
 const verifyAdmin = async (req, res, next) => {
@@ -230,6 +209,82 @@ app.patch("/users/remove-admin/:userId", verifyToken, verifyAdmin, async (req, r
       res.status(400).json({ error: "Error demoting user" });
   }
 }); 
+// app.post("/templates", verifyToken, verifyAdmin, async (req, res) => {
+//   try {
+//       const { title, description, topic, isPublic, tags } = req.body;
+      
+
+//       // Create template with author connection
+//       const newTemplate = await prisma.template.create({
+//         data: {
+//           title,
+//           description,
+//           topic,
+//           isPublic,
+//           author: {
+//             connect: { email: req.decoded.email }  // Use email instead of userId
+//           },
+//           tags: {
+//             connectOrCreate: tags.map(tag => ({
+//               where: { name: tag },
+//               create: { name: tag },
+//             })),
+//           },
+//         },
+//         include: { tags: true },
+//       });
+      
+
+//       res.status(201).json({ message: "Template created successfully", template: newTemplate });
+//   } catch (error) {
+//       console.error("Error creating template:", error);
+//       res.status(500).json({ error: "Internal Server Error" });
+//   }
+// });
+
+app.post("/templates", verifyToken, verifyAdmin, async (req, res) => {
+  try {
+      const { title, description, topic, isPublic, tags, questions } = req.body;
+      
+      // Create template with author connection
+      const newTemplate = await prisma.template.create({
+        data: {
+          title,
+          description,
+          topic,
+          isPublic,
+          author: {
+            connect: { email: req.decoded.email }  // Use email instead of userId
+          },
+          tags: {
+            connectOrCreate: tags.map(tag => ({
+              where: { name: tag },
+              create: { name: tag },
+            })),
+          },
+          questions: {
+            create: questions.map(question => ({
+              title: question.title,
+              description: question.description,
+              type: question.type,
+              orderIndex: question.orderIndex,
+              isRequired: question.isRequired,
+            }))
+          }
+        },
+        include: { 
+          tags: true, 
+          questions: true  // Include questions in the response
+        },
+      });
+
+      res.status(201).json({ message: "Template created successfully", template: newTemplate });
+  } catch (error) {
+      console.error("Error creating template:", error);
+      res.status(500).json({ error: "Internal Server Error" });
+  }
+});
+
 app.listen(5000, () => {
   console.log("Server running on http://localhost:5000");
 });
