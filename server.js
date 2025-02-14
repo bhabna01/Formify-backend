@@ -209,38 +209,6 @@ app.patch("/users/remove-admin/:userId", verifyToken, verifyAdmin, async (req, r
       res.status(400).json({ error: "Error demoting user" });
   }
 }); 
-// app.post("/templates", verifyToken, verifyAdmin, async (req, res) => {
-//   try {
-//       const { title, description, topic, isPublic, tags } = req.body;
-      
-
-//       // Create template with author connection
-//       const newTemplate = await prisma.template.create({
-//         data: {
-//           title,
-//           description,
-//           topic,
-//           isPublic,
-//           author: {
-//             connect: { email: req.decoded.email }  // Use email instead of userId
-//           },
-//           tags: {
-//             connectOrCreate: tags.map(tag => ({
-//               where: { name: tag },
-//               create: { name: tag },
-//             })),
-//           },
-//         },
-//         include: { tags: true },
-//       });
-      
-
-//       res.status(201).json({ message: "Template created successfully", template: newTemplate });
-//   } catch (error) {
-//       console.error("Error creating template:", error);
-//       res.status(500).json({ error: "Internal Server Error" });
-//   }
-// });
 
 app.post("/templates", verifyToken, verifyAdmin, async (req, res) => {
   try {
@@ -282,6 +250,96 @@ app.post("/templates", verifyToken, verifyAdmin, async (req, res) => {
   } catch (error) {
       console.error("Error creating template:", error);
       res.status(500).json({ error: "Internal Server Error" });
+  }
+});
+app.get("/templates", async (req, res) => {
+  try {
+    const templates = await prisma.template.findMany({
+      include: { tags: true, author: true },
+    });
+    res.json(templates);
+  } catch (error) {
+    console.error("Error fetching templates:", error);
+    res.status(500).json({ error: "Internal Server Error" });
+  }
+});
+// app.get("/templates/:id", async (req, res) => {
+//   const { id } = req.params;
+//   try {
+//     const template = await prisma.template.findUnique({
+//       where: { id: parseInt(id) },
+//       include: { questions: true }, // Include questions if needed
+//     });
+
+//     if (!template) {
+//       return res.status(404).json({ error: "Template not found" });
+//     }
+
+//     res.json(template);
+//   } catch (error) {
+//     console.error("Error fetching template:", error);
+//     res.status(500).json({ error: "Internal Server Error" });
+//   }
+// });
+app.get("/templates/:id", async (req, res) => {
+  const { id } = req.params; // id is already a string, but Prisma can handle it directly if it's in the correct format
+
+  try {
+    const template = await prisma.template.findUnique({
+      where: {
+        id: parseInt(id, 10), // Convert the string to an integer, but you can avoid this if you're sure it's an integer
+      },
+      include: {
+        questions: true,
+      },
+    });
+
+    if (!template) {
+      return res.status(404).json({ message: "Template not found" });
+    }
+
+    res.json(template);
+  } catch (error) {
+    console.error("Error fetching template:", error);
+    res.status(500).json({ message: "Server error" });
+  }
+});
+
+
+// form
+app.post("/forms/:templateId", verifyToken, async (req, res) => {
+  const { templateId } = req.params;
+  const { answers } = req.body; 
+  
+  try {
+    // Check if the template exists
+    const template = await prisma.template.findUnique({
+      where: { id: Number(templateId) },
+      include: { questions: true }, // Include questions to validate the answers
+    });
+    
+    if (!template) {
+      return res.status(404).json({ error: "Template not found" });
+    }
+
+    // Create a new form entry
+    const newForm = await prisma.form.create({
+      data: {
+        templateId: template.id,
+        userId: req.decoded.email,  // Assuming you store the userId in decoded token
+        answers: {
+          create: answers.map((answer) => ({
+            value: answer.value,
+            questionId: answer.questionId,
+          })),
+        },
+      },
+    });
+
+    res.status(201).json({ message: "Form submitted successfully", form: newForm });
+  } catch (error) {
+    console.error("Error submitting form:", error);
+    res.status(500).json({ error: "Internal Server Error" });
   }
 });
 

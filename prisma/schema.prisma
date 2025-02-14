@@ -22,6 +22,7 @@ model User {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
   templates Template[]
+  forms      Form[]
 }
 model Template {
   id          Int      @id @default(autoincrement())
@@ -38,6 +39,7 @@ model Template {
 
   questions Question[]
   tags Tag[] @relation("TemplateTags")
+  forms      Form[]
 }
 model Question {
   id          Int      @id @default(autoincrement())
@@ -49,6 +51,7 @@ model Question {
 
   templateId  Int
   template    Template @relation(fields: [templateId], references: [id])
+  answers     Answer[]
 }
 model Tag {
   id   Int     @id @default(autoincrement())
@@ -56,4 +59,22 @@ model Tag {
 
   
   templates Template[] @relation("TemplateTags")
+}
+model Form {
+  id          Int      @id @default(autoincrement())
+  createdAt   DateTime @default(now())
+  templateId  Int
+  template    Template @relation(fields: [templateId], references: [id])
+  userId      Int
+  user        User @relation(fields: [userId], references: [id])
+  answers     Answer[]
+}
+
+model Answer {
+  id          Int      @id @default(autoincrement())
+  value       String
+  questionId  Int
+  formId      Int
+  question    Question @relation(fields: [questionId], references: [id])
+  form        Form @relation(fields: [formId], references: [id])
 }
