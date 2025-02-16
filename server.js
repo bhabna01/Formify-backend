@@ -342,6 +342,66 @@ app.post("/forms/:templateId", verifyToken, async (req, res) => {
     res.status(500).json({ error: "Internal Server Error" });
   }
 });
+// app.get("/template/search", async (req, res) => {
+//   const { query } = req.query;
+//   if (!query) return res.status(400).json({ error: "Query parameter is required" });
+
+//   try {
+//     const templates = await prisma.$queryRaw`
+//       SELECT DISTINCT t.*
+//       FROM "Template" t
+//       LEFT JOIN "Question" q ON q."templateId" = t.id
+//       WHERE
+//         to_tsvector('english', t.title || ' ' || t.description) @@ plainto_tsquery(${query}) OR
+//         to_tsvector('english', q.title || ' ' || q.description) @@ plainto_tsquery(${query})
+//     `;
+    
+//     res.json(templates);
+//   } catch (error) {
+//     console.error("Search Error:", error);
+//     res.status(500).json({ error: "Internal server error" });
+//   }
+// });
+app.get("/template/search", async (req, res) => {
+  const { query } = req.query;
+  if (!query) return res.status(400).json({ error: "Query parameter is required" });
+
+  try {
+      const searchTerms = query
+          .toString()
+          .replace(/[^a-zA-Z0-9 ]/g, " ")
+          .trim()
+          .split(/\s+/)
+          .filter(word => word.length > 2)
+          .map(term => `${term}:*`)
+          .join(" & ");
+
+      const templates = await prisma.$queryRaw`
+          SELECT 
+            id,
+            title,
+            description,
+            topic,
+            "isPublic",
+            "createdAt",
+            "updatedAt",
+            "authorId",
+            ts_rank(search_vector, to_tsquery('english', ${searchTerms}))::float as rank
+          FROM "Template"
+          WHERE 
+            search_vector @@ to_tsquery('english', ${searchTerms})
+          ORDER BY rank DESC
+          LIMIT 100
+      `;
+
+      res.json(templates);
+  } catch (error) {
+      console.error("❌ Search Error:", error);
+      res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+
 
 app.listen(5000, () => {
   console.log("Server running on http://localhost:5000");
