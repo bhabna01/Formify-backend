@@ -263,24 +263,7 @@ app.get("/templates", async (req, res) => {
     res.status(500).json({ error: "Internal Server Error" });
   }
 });
-// app.get("/templates/:id", async (req, res) => {
-//   const { id } = req.params;
-//   try {
-//     const template = await prisma.template.findUnique({
-//       where: { id: parseInt(id) },
-//       include: { questions: true }, // Include questions if needed
-//     });
 
-//     if (!template) {
-//       return res.status(404).json({ error: "Template not found" });
-//     }
-
-//     res.json(template);
-//   } catch (error) {
-//     console.error("Error fetching template:", error);
-//     res.status(500).json({ error: "Internal Server Error" });
-//   }
-// });
 app.get("/templates/:id", async (req, res) => {
   const { id } = req.params; // id is already a string, but Prisma can handle it directly if it's in the correct format
 
@@ -310,23 +293,34 @@ app.get("/templates/:id", async (req, res) => {
 app.post("/forms/:templateId", verifyToken, async (req, res) => {
   const { templateId } = req.params;
   const { answers } = req.body; 
-  
+  const userEmail = req.decoded.email; // Extract email from token
+
   try {
+    // Find user by email to get user ID
+    const user = await prisma.user.findUnique({
+      where: { email: userEmail },
+      select: { id: true }, // Get only the `id`
+    });
+
+    if (!user) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
     // Check if the template exists
     const template = await prisma.template.findUnique({
       where: { id: Number(templateId) },
-      include: { questions: true }, // Include questions to validate the answers
+      include: { questions: true },
     });
-    
+
     if (!template) {
       return res.status(404).json({ error: "Template not found" });
     }
 
-    // Create a new form entry
+    // Create a new form entry with the correct user ID
     const newForm = await prisma.form.create({
       data: {
         templateId: template.id,
-        userId: req.decoded.email,  // Assuming you store the userId in decoded token
+        userId: user.id, // Use the integer user ID
         answers: {
           create: answers.map((answer) => ({
             value: answer.value,
@@ -336,32 +330,15 @@ app.post("/forms/:templateId", verifyToken, async (req, res) => {
       },
     });
 
-    res.status(201).json({ message: "Form submitted successfully", form: newForm });
+    res.status(201).json(newForm);
   } catch (error) {
-    console.error("Error submitting form:", error);
+    console.error("Error creating form:", error);
     res.status(500).json({ error: "Internal Server Error" });
   }
 });
-// app.get("/template/search", async (req, res) => {
-//   const { query } = req.query;
-//   if (!query) return res.status(400).json({ error: "Query parameter is required" });
 
-//   try {
-//     const templates = await prisma.$queryRaw`
-//       SELECT DISTINCT t.*
-//       FROM "Template" t
-//       LEFT JOIN "Question" q ON q."templateId" = t.id
-//       WHERE
-//         to_tsvector('english', t.title || ' ' || t.description) @@ plainto_tsquery(${query}) OR
-//         to_tsvector('english', q.title || ' ' || q.description) @@ plainto_tsquery(${query})
-//     `;
-    
-//     res.json(templates);
-//   } catch (error) {
-//     console.error("Search Error:", error);
-//     res.status(500).json({ error: "Internal server error" });
-//   }
-// });
+
+
 app.get("/template/search", async (req, res) => {
   const { query } = req.query;
   if (!query) return res.status(400).json({ error: "Query parameter is required" });
@@ -401,6 +378,22 @@ app.get("/template/search", async (req, res) => {
   }
 });
 
+app.get("/admin/forms", verifyToken, verifyAdmin, async (req, res) => {
+  try {
+    const forms = await prisma.form.findMany({
+      include: {
+        user: { select: { id: true, username: true, email: true } }, // Get user details
+        answers: { include: { question: { select: { title: true } } } }, // Get answers with questions
+        template: { select: { title: true } }, // Get template name
+      },
+    });
+
+    res.json(forms);
+  } catch (error) {
+    console.error("Error fetching forms:", error);
+    res.status(500).json({ error: "Internal Server Error" });
+  }
+});
 
 
 app.listen(5000, () => {
