@@ -516,6 +516,68 @@ app.get("/admin/forms", verifyToken, verifyAdmin, async (req, res) => {
   }
 });
 
+app.patch("/templates/:templateId", verifyToken, async (req, res) => {
+  const { templateId } = req.params;
+  const { title, description, topic, isPublic, questions } = req.body;
+
+  try {
+    // Ensure the template exists
+    const existingTemplate = await prisma.template.findUnique({
+      where: { id: Number(templateId) },
+    });
+
+    if (!existingTemplate) {
+      return res.status(404).json({ error: "Template not found" });
+    }
+
+    // Update the template
+    const updatedTemplate = await prisma.template.update({
+      where: { id: Number(templateId) },
+      data: {
+        title,
+        description,
+        topic,
+        isPublic,
+        questions: {
+          deleteMany: {}, // Remove old questions
+          create: questions.map((q) => ({
+            title: q.title,
+            description: q.description,
+            type: q.type,
+            options: q.options ? JSON.stringify(q.options) : null,
+          })),
+        },
+      },
+      include: { questions: true },
+    });
+
+    res.json(updatedTemplate);
+  } catch (error) {
+    console.error("Error updating template:", error);
+    res.status(500).json({ error: "Failed to update template" });
+  }
+});
+app.delete("/templates/:templateId", verifyToken, async (req, res) => {
+  const { templateId } = req.params;
+
+  try {
+    // First, delete all questions related to this template
+    await prisma.question.deleteMany({
+      where: { templateId: Number(templateId) },
+    });
+
+    // Now, delete the template
+    await prisma.template.delete({
+      where: { id: Number(templateId) },
+    });
+
+    res.json({ message: "Template deleted successfully" });
+  } catch (error) {
+    console.error("Error deleting template:", error);
+    res.status(500).json({ error: "Failed to delete template" });
+  }
+});
+
 
 app.listen(5000, () => {
   console.log("Server running on http://localhost:5000");
