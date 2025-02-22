@@ -34,24 +34,20 @@ model Template {
   author      User       @relation(fields: [authorId], references: [id])
   tags        Tag[]      @relation("TemplateTags")
   
-  
-  
 }
 
 model Question {
   id          Int      @id @default(autoincrement())
   title       String
-  description String
+  description String?
   type        String
   orderIndex  Int      @default(0)
   isRequired  Boolean  @default(false)
   templateId  Int
   answers     Answer[]
   template    Template @relation(fields: [templateId], references: [id])
-  
-  options     Json?  // NEW FIELD: Stores options as a JSON string
+  options     String?
 }
-
 
 model Tag {
   id        Int        @id @default(autoincrement())
@@ -75,5 +71,5 @@ model Answer {
   questionId Int
   formId     Int
   form       Form     @relation(fields: [formId], references: [id])
-  question   Question @relation(fields: [questionId], references: [id])
+  question   Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
 }
