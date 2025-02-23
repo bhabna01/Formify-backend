@@ -179,7 +179,16 @@ app.delete("/users/:userId", verifyToken, verifyAdmin, async (req, res) => {
       res.status(400).json({ error: "Error deleting user" });
   }
 });
+app.get("/users/email/:email", async (req, res) => {
+  const { email } = req.params;
+  const user = await prisma.user.findUnique({ where: { email } });
 
+  if (!user) {
+      return res.status(404).json({ error: "User not found" });
+  }
+
+  res.json({ is_blocked: user.isBlocked });
+});
 // Add admin role
 app.patch("/users/admin/:userId", verifyToken, verifyAdmin, async (req, res) => {
   const { userId } = req.params;
@@ -210,48 +219,6 @@ app.patch("/users/remove-admin/:userId", verifyToken, verifyAdmin, async (req, r
   }
 }); 
 
-// app.post("/templates", verifyToken, verifyAdmin, async (req, res) => {
-//   try {
-//       const { title, description, topic, isPublic, tags, questions } = req.body;
-      
-//       // Create template with author connection
-//       const newTemplate = await prisma.template.create({
-//         data: {
-//           title,
-//           description,
-//           topic,
-//           isPublic,
-//           author: {
-//             connect: { email: req.decoded.email }  // Use email instead of userId
-//           },
-//           tags: {
-//             connectOrCreate: tags.map(tag => ({
-//               where: { name: tag },
-//               create: { name: tag },
-//             })),
-//           },
-//           questions: {
-//             create: questions.map(question => ({
-//               title: question.title,
-//               description: question.description,
-//               type: question.type,
-//               orderIndex: question.orderIndex,
-//               isRequired: question.isRequired,
-//             }))
-//           }
-//         },
-//         include: { 
-//           tags: true, 
-//           questions: true  // Include questions in the response
-//         },
-//       });
-
-//       res.status(201).json({ message: "Template created successfully", template: newTemplate });
-//   } catch (error) {
-//       console.error("Error creating template:", error);
-//       res.status(500).json({ error: "Internal Server Error" });
-//   }
-// });
 
 app.post("/templates", verifyToken, verifyAdmin, async (req, res) => {
   try {
@@ -289,7 +256,8 @@ app.post("/templates", verifyToken, verifyAdmin, async (req, res) => {
             type: q.type,
             orderIndex: q.orderIndex,
             isRequired: q.isRequired,
-            options: q.type === "text" ? null : q.options
+            // options: q.type === "text" ? null : q.options
+            options: q.type === "text" ? null : JSON.stringify(q.options) 
           }))
         }
       },
@@ -371,56 +339,7 @@ app.get("/tags", async (req, res) => {
 });
 
 
-// app.get("/templates/:id", async (req, res) => {
-//   const { id } = req.params; // id is already a string, but Prisma can handle it directly if it's in the correct format
 
-//   try {
-//     const template = await prisma.template.findUnique({
-//       where: {
-//         id: parseInt(id, 10), // Convert the string to an integer, but you can avoid this if you're sure it's an integer
-//       },
-//       include: {
-//         questions: true,
-//       },
-//     });
-
-//     if (!template) {
-//       return res.status(404).json({ message: "Template not found" });
-//     }
-
-//     res.json(template);
-//   } catch (error) {
-//     console.error("Error fetching template:", error);
-//     res.status(500).json({ message: "Server error" });
-//   }
-// });
-// app.get("/templates/:templateId", async (req, res) => {
-//   try {
-//     const { templateId } = req.params;
-
-//     const template = await prisma.template.findUnique({
-//       where: { id: parseInt(templateId) }, // Ensure templateId is parsed as an integer
-//       include: { questions: true },
-//     });
-
-//     if (!template) {
-//       return res.status(404).json({ error: "Template not found" });
-//     }
-
-//     const formattedTemplate = {
-//       ...template,
-//       questions: template.questions.map((q) => ({
-//         ...q,
-//         options: q.options ? JSON.parse(q.options) : [], // Convert JSON string back to array
-//       })),
-//     };
-
-//     res.json(formattedTemplate);
-//   } catch (error) {
-//     console.error("Error fetching template:", error);
-//     res.status(500).json({ error: "Failed to fetch template" });
-//   }
-// });
 
 app.get("/templates/:templateId", async (req, res) => {
   try {
@@ -449,114 +368,7 @@ app.get("/templates/:templateId", async (req, res) => {
     res.status(500).json({ error: "Failed to fetch template" });
   }
 });
-// app.get("/templates/:templateId", async (req, res) => {
-//   try {
-//     const { templateId } = req.params;
 
-//     const template = await prisma.template.findUnique({
-//       where: { id: parseInt(templateId) },
-//       include: { questions: true },
-//     });
-
-//     if (!template) {
-//       return res.status(404).json({ error: "Template not found" });
-//     }
-
-//     // const formattedTemplate = {
-//     //   ...template,
-//     //   questions: template.questions.map((q) => {
-//     //     let options = [];
-//     //     if (q.options) {
-//     //       try {
-//     //         // Try parsing as JSON first
-//     //         options = JSON.parse(q.options);
-//     //       } catch (jsonError) {
-//     //         // Fallback to string splitting if JSON parse fails
-//     //         console.warn(`Failed to parse options as JSON for question ${q.id}, trying string split`);
-//     //         options = typeof q.options === 'string' ? 
-//     //           q.options.split(',').map(opt => opt.trim()) : 
-//     //           [];
-//     //       }
-//     //     }
-//     //     return {
-//     //       ...q,
-//     //       options: Array.isArray(options) ? options : []
-//     //     };
-//     //   }),
-//     // };
-
-//     // res.json(formattedTemplate);
-//     const formattedTemplate = {
-//       ...template,
-//       questions: template.questions.map((q) => ({
-//         ...q,
-//         options: (() => {
-//           if (!q.options) return []; // If options is null, return empty array
-          
-//           try {
-//             const parsedOptions = JSON.parse(q.options);
-//             return Array.isArray(parsedOptions) ? parsedOptions : [];
-//           } catch (error) {
-//             console.error(`Failed to parse options for question ${q.id}:`, error);
-//             return [];
-//           }
-//         })(),
-//       })),
-//     };
-    
-//   } catch (error) {
-//     console.error("Error fetching template:", error);
-//     res.status(500).json({ error: "Failed to fetch template" });
-//   }
-// });
-
-// form
-// app.post("/forms/:templateId", verifyToken, async (req, res) => {
-//   const { templateId } = req.params;
-//   const { answers } = req.body; 
-//   const userEmail = req.decoded.email; // Extract email from token
-
-//   try {
-//     // Find user by email to get user ID
-//     const user = await prisma.user.findUnique({
-//       where: { email: userEmail },
-//       select: { id: true }, // Get only the `id`
-//     });
-
-//     if (!user) {
-//       return res.status(404).json({ error: "User not found" });
-//     }
-
-//     // Check if the template exists
-//     const template = await prisma.template.findUnique({
-//       where: { id: Number(templateId) },
-//       include: { questions: true },
-//     });
-
-//     if (!template) {
-//       return res.status(404).json({ error: "Template not found" });
-//     }
-
-//     // Create a new form entry with the correct user ID
-//     const newForm = await prisma.form.create({
-//       data: {
-//         templateId: template.id,
-//         userId: user.id, // Use the integer user ID
-//         answers: {
-//           create: answers.map((answer) => ({
-//             value: answer.value,
-//             questionId: answer.questionId,
-//           })),
-//         },
-//       },
-//     });
-
-//     res.status(201).json(newForm);
-//   } catch (error) {
-//     console.error("Error creating form:", error);
-//     res.status(500).json({ error: "Internal Server Error" });
-//   }
-// });
 app.post("/forms/:templateId", verifyToken, async (req, res) => {
   const { templateId } = req.params;
   const { answers } = req.body; 
@@ -662,47 +474,7 @@ app.get("/admin/forms", verifyToken, verifyAdmin, async (req, res) => {
   }
 });
 
-// app.patch("/templates/:templateId", verifyToken,verifyAdmin, async (req, res) => {
-//   const { templateId } = req.params;
-//   const { title, description, topic, isPublic, questions } = req.body;
 
-//   try {
-//     // Ensure the template exists
-//     const existingTemplate = await prisma.template.findUnique({
-//       where: { id: Number(templateId) },
-//     });
-
-//     if (!existingTemplate) {
-//       return res.status(404).json({ error: "Template not found" });
-//     }
-
-//     // Update the template
-//     const updatedTemplate = await prisma.template.update({
-//       where: { id: Number(templateId) },
-//       data: {
-//         title,
-//         description,
-//         topic,
-//         isPublic,
-//         questions: {
-//           deleteMany: {}, // Remove old questions
-//           create: questions.map((q) => ({
-//             title: q.title,
-//             description: q.description,
-//             type: q.type,
-//             options: q.options ? JSON.stringify(q.options) : null,
-//           })),
-//         },
-//       },
-//       include: { questions: true },
-//     });
-
-//     res.json(updatedTemplate);
-//   } catch (error) {
-//     console.error("Error updating template:", error);
-//     res.status(500).json({ error: "Failed to update template" });
-//   }
-// });
 app.patch("/templates/:templateId", verifyToken, verifyAdmin, async (req, res) => {
   const { templateId } = req.params;
   const { title, description, topic, isPublic, questions } = req.body;
@@ -784,7 +556,64 @@ app.delete("/templates/:templateId", verifyToken,verifyAdmin, async (req, res) =
     res.status(500).json({ error: "Failed to delete template" });
   }
 });
+app.get("/tags/search", async (req, res) => {
+  const { tag } = req.query;
 
+  if (!tag) {
+    return res.status(400).json({ error: "Tag name is required" });
+  }
+
+  try {
+    const templates = await prisma.template.findMany({
+      where: {
+        tags: {
+          some: {
+            name: tag, // Match the tag name
+          },
+        },
+      },
+      include: {
+        author: {
+          select: { username: true },
+        },
+        tags: {
+          select: { name: true },
+        },
+      },
+    });
+
+    res.json(templates);
+  } catch (error) {
+    console.error("Error fetching templates by tag:", error);
+    res.status(500).json({ error: "Failed to fetch templates" });
+  }
+});
+app.get("/forms/template/:templateId", async (req, res) => {
+  const { templateId } = req.params;
+
+  try {
+    const forms = await prisma.form.findMany({
+      where: { templateId: parseInt(templateId) },
+      include: {
+        user: { select: { username: true } }, // Fetch user's name
+        answers: {
+          include: {
+            question: { select: { title: true } }, // Fetch related question
+          },
+        },
+      },
+    });
+
+    if (!forms.length) {
+      return res.status(404).json({ message: "No submissions found." });
+    }
+
+    res.json(forms);
+  } catch (error) {
+    console.error("Error fetching forms:", error);
+    res.status(500).json({ error: "Failed to fetch forms" });
+  }
+});
 
 app.listen(5000, () => {
   console.log("Server running on http://localhost:5000");
